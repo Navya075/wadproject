@@ -78,14 +78,22 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
   try {
     const { title, description, category, type, location, date } = req.body;
 
+    // Validate required fields
+    if (!title || !description || !category || !type || !location || !date) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Handle image upload safely
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : null;
+
     const item = new Item({
-      title,
-      description,
-      category,
-      type,
-      location,
+      title: title.trim(),
+      description: description.trim(),
+      category: category.trim(),
+      type: type.trim(),
+      location: location.trim(),
       date: new Date(date),
-      image: req.file ? `/uploads/${req.file.filename}` : null,
+      image: imagePath,
       owner: req.user._id
     });
 
@@ -94,14 +102,24 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 
     res.status(201).json(item);
   } catch (error) {
-    console.error('Error creating item:', error);
+    console.log('Error creating item:', error);
+    
+    // Handle multer errors
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+      return res.status(400).json({ error: 'File size too large. Maximum size is 5MB.' });
     }
     if (error.message.includes('Only image files are allowed')) {
-      return res.status(400).json({ message: error.message });
+      return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ message: 'Server error', error: error.message });
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: errors.join(', ') });
+    }
+    
+    // Handle other errors
+    res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
 
